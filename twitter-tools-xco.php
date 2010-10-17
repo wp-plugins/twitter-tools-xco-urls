@@ -3,7 +3,7 @@
 Plugin Name: Twitter Tools - x.co URLs 
 Plugin URI: http://www.chriskdesigns.com
 Description: Use x.co for URL shortening with Twitter Tools. This plugin relies on Twitter Tools, configure it on the Twitter Tools settings page.
-Version: 1.1
+Version: 1.1.1
 Author: Chris Klosowski
 Author URI: http://www.chriskdesigns.com
 */
@@ -211,11 +211,16 @@ function xco_urls_get() {
 	$list = array();
 	foreach ($jsonDecoded->GetMapsResult as $key=>$linkdata) {
 		if ( strpos( $linkdata->Url, $siteURL ) ) {
-			$list[$key]['url'] = $linkdata->Url;
+			if (!get_option('permalink_structure')) {
+				$list[$key]['url'] = $linkdata->Url;
+			} else {
+				$list[$key]['url'] = substr( strrchr( substr( $linkdata->Url, 0, strlen( $linkdata->Url ) - 1 ), '/' ), 1 );
+			}
 			$list[$key]['clicks'] = $linkdata->TotalClicks;
 			$list[$key]['short'] = 'http://x.co/' . $linkdata->Encoded;
 		}
 	}
+
 	return $list;
 }
 
@@ -228,18 +233,27 @@ function get_posts_from_urls($list) {
 	global $wpdb;
 	?><div id="xco_stats"><table><tr><td width="75%" class="titlecol title_label">Post</td><td width="25%" class="clickscol clicks_label">Clicks</td></tr><?php
 	$i = 0;
+	if (!get_option('permalink_structure')) {
+		$permCol = 'guid';
+	}
 	foreach ($list as $key=>$post) {
 		if ($i < 10) {
-			$postData = $wpdb->get_results( $wpdb->prepare ( 'SELECT ID, post_title from wp_posts WHERE guid = %s', $post['url'] ) );
-			?>
-			<tr>
-				<td class="title"><a href="<? echo get_permalink($postData[0]->ID); ?>"><?php echo $postData[0]->post_title; ?></a> - <span class="edit"><a href="post.php?post=<?php echo $postData[0]->ID; ?>&action=edit">Edit</a></span></td>
-				<td class="clicks"><?php echo $post['clicks']; ?></td>
-			</tr>
-			<tr>
-				<td colspan="2" class="shorturl"><?php echo $post['short']; ?><br /></td>
-			</tr>
+			if ($permCol == 'guid') {
+				$postData = $wpdb->get_results( $wpdb->prepare ( 'SELECT ID, post_title from wp_posts WHERE guid = %s AND post_type = "post"', $post['url'] ) );
+			} else {
+				$postData = $wpdb->get_results( $wpdb->prepare ( 'SELECT ID, post_title from wp_posts WHERE post_name = %s AND post_type = "post"', $post['url'] ) );
+			}
+				if ($postData[0]->ID) {
+				?>
+				<tr>
+					<td class="title"><a href="<? echo get_permalink($postData[0]->ID); ?>"><?php echo $postData[0]->post_title; ?></a> - <span class="edit"><a href="post.php?post=<?php echo $postData[0]->ID; ?>&action=edit">Edit</a></span></td>
+					<td class="clicks"><?php echo $post['clicks']; ?></td>
+				</tr>
+				<tr>
+					<td colspan="2" class="shorturl"><?php echo $post['short']; ?><br /></td>
+				</tr>
 			<?php
+				}
 			$i++;
 		}
 	}
